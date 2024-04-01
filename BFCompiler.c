@@ -131,16 +131,15 @@ ExecutionStatus finishExecution(ExecutionStatus code, Node *memory, Node *bracke
     return code;
 }
 
-ExecutionStatus finalBracketCheck(Node* bracket, Node* mem, Node* bracketsNext) {
+ExecutionStatus finalBracketCheck(Node* bracket, Node* mem, Node* brackets) {
     if (bracket->ivalue != -1) {
-        return finishExecution(BRACKET_WAS_NOT_CLOSED, mem, bracketsNext);
+        return finishExecution(BRACKET_WAS_NOT_CLOSED, mem, brackets);
     }
-    return finishExecution(CODE_EXECUTED_WITHOUT_ISSUES, mem, bracketsNext);
+    return finishExecution(CODE_EXECUTED_WITHOUT_ISSUES, mem, brackets);
 }
 
 int parseCode(System *files) {
-    Node *mem = getNode(CHAR, 0), brackets = {.prev = NULL, .next = NULL, .ivalue = -1, .type = INTEGER};
-    Node *p = mem, *bracket = &brackets;
+    Node *mem = getNode(CHAR, 0), *brackets = getNode(INTEGER, -1), *p = mem, *bracket = brackets;
     int tmp;
     char c;
     while((c = getc(files->code)) != EOF) {
@@ -157,7 +156,7 @@ int parseCode(System *files) {
                 break;
             case '<':
                 if (p->prev == NULL) {
-                    return finishExecution(ERROR_WHILE_EXECUTING_THE_CODE, mem, brackets.next);
+                    return finishExecution(ERROR_WHILE_EXECUTING_THE_CODE, mem, brackets);
                 }
                 p = p->prev;
                 break;
@@ -166,7 +165,7 @@ int parseCode(System *files) {
                 break;
             case ']':
                 if (bracket->ivalue == -1) {
-                    return finishExecution(BRACKET_WAS_NOT_OPENED, mem, brackets.next);
+                    return finishExecution(BRACKET_WAS_NOT_OPENED, mem, brackets);
                 }
                 bracket = handleBracketClosing(p, bracket, files);
                 break;
@@ -176,14 +175,14 @@ int parseCode(System *files) {
             case ',':
                 if (!files->input) {
                     fprintf(files->output, "//LOG: Error: Tried to read from non-existing input.txt file");
-                    return finishExecution(ERROR_WHILE_EXECUTING_THE_CODE, mem, brackets.next);
+                    return finishExecution(ERROR_WHILE_EXECUTING_THE_CODE, mem, brackets);
                 }
                 fscanf(files->input, "%d", &tmp);
                 p->cvalue = (char) (tmp % 256);
                 break;
         }
     }
-    return finalBracketCheck(bracket, mem, brackets.next);
+    return finalBracketCheck(bracket, mem, brackets);
 }
 
 void printExecutionIssues(ExecutionStatus result) {
