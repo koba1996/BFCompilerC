@@ -1,21 +1,28 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define OUTPUT_FILE "BFIO/output.txt"
 #define INPUT_FILE "BFIO/input.txt"
 #define CODE_FILE "BFIO/code.txt"
 
-enum FileStatus {
+typedef enum FileStatus {
     FILES_OPENED_SUCCESSFULLY,
     COULD_NOT_OPEN_FILES,
     FILES_CLOSED_SUCCESSFULLY,
-};
+} FileStatus;
+
+typedef enum LogLevel {
+    ERROR,
+    WARNING
+} LogLevel;
 
 typedef enum ExecutionStatus {
     CODE_EXECUTED_WITHOUT_ISSUES,
     ERROR_WHILE_EXECUTING_THE_CODE,
     BRACKET_WAS_NOT_CLOSED,
     BRACKET_WAS_NOT_OPENED,
+    FAILED_TO_READ_INPUT_FILE
 } ExecutionStatus;
 
 typedef enum NodeType {
@@ -39,6 +46,19 @@ typedef struct node {
     };
 } Node;
 
+void logError(char* message, LogLevel logLevel, System* files) {
+    char level[8];
+    if (logLevel == ERROR) {
+        strcpy(level, "Error");
+    } else if (logLevel == WARNING) {
+        strcpy(level, "Warning");
+    }
+    printf("%s: %s\n", level, message);
+    if (files->output) {
+        fprintf(files->output, "// LOG: %s: %s\n", level, message);
+    }
+}
+
 int openFiles(System* files) {
     files->output = fopen(OUTPUT_FILE, "w");
     if (files->output == NULL) {
@@ -47,13 +67,13 @@ int openFiles(System* files) {
     }
     files->code = fopen(CODE_FILE, "r");
     if (files->code == NULL) {
-        fprintf(files->output, "//LOG: Error: Could not open code.txt");
+        logError("Could not open code.txt", ERROR, files);
         fclose(files->output);
         return COULD_NOT_OPEN_FILES;
     }
     files->input = fopen(INPUT_FILE, "r");
     if (files->input == NULL) {
-        fprintf(files->output, "//LOG: Warning: Could not open input.txt\n");
+        logError("Could not open input.txt", WARNING, files);
     }
     return FILES_OPENED_SUCCESSFULLY;
 }
@@ -174,8 +194,7 @@ int parseCode(System *files) {
                 break;
             case ',':
                 if (!files->input) {
-                    fprintf(files->output, "//LOG: Error: Tried to read from non-existing input.txt file");
-                    return finishExecution(ERROR_WHILE_EXECUTING_THE_CODE, mem, brackets);
+                    return finishExecution(FAILED_TO_READ_INPUT_FILE, mem, brackets);
                 }
                 fscanf(files->input, "%d", &tmp);
                 p->cvalue = (char) (tmp % 256);
@@ -185,8 +204,22 @@ int parseCode(System *files) {
     return finalBracketCheck(bracket, mem, brackets);
 }
 
-void printExecutionIssues(ExecutionStatus result) {
-
+void printExecutionIssues(ExecutionStatus result, System* files) {
+    switch (result)
+    {
+    case BRACKET_WAS_NOT_CLOSED:
+        logError("No ']' character found after the '[' character", ERROR, files);
+        break;
+    case BRACKET_WAS_NOT_OPENED:
+        logError("']' character found before the opening '[' character", ERROR, files);
+        break;
+    case FAILED_TO_READ_INPUT_FILE:
+        logError("Tried to read from non-existing input.txt file", ERROR, files);
+        break;
+    case ERROR_WHILE_EXECUTING_THE_CODE: // TODO: make every error message meaningful
+        logError("There was an error during the process", ERROR, files);
+        break;
+    }
 }
 
 int main() {
@@ -194,20 +227,18 @@ int main() {
     if (openFiles(&files) == FILES_OPENED_SUCCESSFULLY) {
         int executionResult = parseCode(&files);
         if (executionResult == CODE_EXECUTED_WITHOUT_ISSUES) {
+            printf("Program executed successfully!");
             if (closeFiles(files.output, files.code, files.input) != FILES_CLOSED_SUCCESSFULLY) {
-                printf("There was an error during closing the files");
-                printf("The code executed successfully");
+                logError("There was an error during the process", ERROR, &files);
                 return -1;
             }
-            printf("Program executed successfully!");
             return 0;
         } else {
-            printf("There was an error during the process");
+            printExecutionIssues(executionResult, &files);
             closeFiles(files.output, files.code, files.input);
             return -1;
         }
     } else if (openFiles(&files) == COULD_NOT_OPEN_FILES) {
-        printf("Could not open one of the required files.");
         return -1;
     }
 }
