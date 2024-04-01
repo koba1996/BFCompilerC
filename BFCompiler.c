@@ -62,7 +62,7 @@ void logError(char* message, LogLevel logLevel, System* files) {
 int openFiles(System* files) {
     files->output = fopen(OUTPUT_FILE, "w");
     if (files->output == NULL) {
-        printf("Error: Could not create the output file");
+        logError("Error: Could not create the output file", ERROR, files);
         return COULD_NOT_OPEN_FILES;
     }
     files->code = fopen(CODE_FILE, "r");
