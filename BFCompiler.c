@@ -8,7 +8,8 @@ enum fileStatus {
 };
 
 enum executionStatus {
-    CODE_EXECUTED_WITHOUT_ISSUES
+    CODE_EXECUTED_WITHOUT_ISSUES,
+    ERROR_WHILE_EXECUTING_THE_CODE
 };
 
 typedef struct files {
@@ -16,6 +17,18 @@ typedef struct files {
     FILE *output;
     FILE *code;
 } System;
+
+typedef struct node {
+    struct node *next;
+    struct node *prev;
+    char value;
+} Node;
+
+typedef struct intNode {
+    struct intNode *next;
+    struct intNode *prev;
+    int value;
+} IntNode;
 
 int openFiles(System* files) {
     files->output = fopen("BFIO/output.txt", "w");
@@ -45,54 +58,127 @@ int closeFiles(FILE *output, FILE *code, FILE *input) {
     return FILES_CLOSED_SUCCESSFULLY;
 }
 
+void freeMemory(Node *head) {
+    Node *p = head;
+    while (head->next) {
+        head = head->next;
+        free(p);
+        p = head;
+    }
+    free(head);
+}
+
+void freeBrackets(IntNode *head) {
+    IntNode *p = head;
+    while (head->next) {
+        head = head->next;
+        free(p);
+        p = head;
+    }
+    free(head);
+}
+
+void freeMemoryAndBrackets(Node *p, IntNode *q) {
+    freeMemory(p);
+    if (q) {
+        freeBrackets(q);
+    }
+}
+
+void createNext(Node *p) {
+    Node *next = (Node*) malloc(sizeof(Node));
+    next->next = NULL;
+    next->prev = p;
+    next->value = 0;
+    p->next = next;
+}
+
+Node* getHead() {
+    Node *mem = (Node*) malloc(sizeof(Node));
+    mem->next = NULL;
+    mem->prev = NULL;
+    mem->value = 0;
+    return mem;
+}
+
+IntNode* getHeadInt() {
+    IntNode *p = (IntNode*) malloc(sizeof(IntNode));
+    p->next = NULL;
+    p->prev = NULL;
+    p->value = -1;
+    return p;
+}
+
+void createNextInt(IntNode *p, int value) {
+    IntNode *next = (IntNode*) malloc(sizeof(Node));
+    next->next = NULL;
+    next->prev = p;
+    next->value = value;
+    p->next = next;
+}
+
 int parseCode(System *files) {
-    int mem[100] = {0};
-    int *p = mem;
-    int index = 0;
-    FILE *output = files->output;
-    FILE *code = files->code;
-    FILE *input = files->input;
-    char c = getc(code);
-    while(c != EOF) {
+    Node *mem = getHead();
+    IntNode brackets = {.prev = NULL, .next = NULL, .value = -1};
+    Node *p = mem;
+    IntNode *bracket = &brackets;
+    FILE *output = files->output, *code = files->code, *input = files->input;
+    int tmp;
+    char c;
+    while((c = getc(code)) != EOF) {
         switch(c) {
             case '+': 
-                ++*p;
-                if (*p > 255) {
-                    *p %= 256;
-                }
+                p->value++;
                 break;
             case '-':
-                --*p;
-                while (*p < 0) {
-                    *p += 256;
-                }
+                p->value--;
                 break;
             case '>':
-                index++;
-                if (index == 100) {
-                    index = 0;
-                    p = mem;
-                } else {
-                    p++;
-                }
+                if (p->next == NULL)
+                    createNext(p);
+                p = p->next;
                 break;
             case '<':
-                index--;
-                if (index == -1) {
-                    index = 99;
-                    p = mem + 99;
+                if (p->prev == NULL) {
+                    freeMemoryAndBrackets(mem, brackets.next);
+                    return ERROR_WHILE_EXECUTING_THE_CODE;
+                }
+                p = p->prev;
+                break;
+            case '[':
+                if (p->value == 0) {
+                    while(c != ']')
+                        c = getc(code);
                 } else {
-                    p++;
+                    createNextInt(bracket, ftell(code));
+                    bracket = bracket->next;
+                }
+                break;
+            case ']':
+                if (bracket->value == -1) {
+                    freeMemoryAndBrackets(mem, brackets.next);
+                    return ERROR_WHILE_EXECUTING_THE_CODE;
+                }
+                if (p->value == 0) {
+                    bracket = bracket->prev;
+                    free(bracket->next);
+                    bracket->next = NULL;
+                } else {
+                    fseek(code, bracket->value, SEEK_SET);
                 }
                 break;
             case '.':
-                putc(*p, output);
+                putc(p->value, output);
                 break;
             case ',':
-                fscanf(input, "%d", p);
+                fscanf(input, "%d", &tmp);
+                p->value = (char) (tmp % 256);
                 break;
         }
-        c = getc(code);
+    }
+    freeMemory(mem);
+    if (bracket->value != -1) {
+        return ERROR_WHILE_EXECUTING_THE_CODE;
     }
     return CODE_EXECUTED_WITHOUT_ISSUES;
 }
@@ -107,9 +193,12 @@ int main() {
                 printf("The code executed successfully");
                 return -1;
             }
+            printf("Program executed successfully!");
             return 0;
         } else {
-            // Print the error message;
+            printf("There was an error during the process");
+            closeFiles(files.output, files.code, files.input);
+            return -1;
         }
     } else if (openFiles(&files) == COULD_NOT_OPEN_FILES) {
         printf("Could not open one of the required files.");
