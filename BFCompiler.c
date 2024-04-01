@@ -78,12 +78,12 @@ int openFiles(System* files) {
     return FILES_OPENED_SUCCESSFULLY;
 }
 
-int closeFiles(FILE *output, FILE *code, FILE *input) {
-    if (input != NULL) {
-        fclose(input);
+int closeFiles(System* files) {
+    if (files->input != NULL) {
+        fclose(files->input);
     }
-    fclose(code);
-    fclose(output);
+    fclose(files->code);
+    fclose(files->output);
     return FILES_CLOSED_SUCCESSFULLY;
 }
 
@@ -224,21 +224,22 @@ void printExecutionIssues(ExecutionStatus result, System* files) {
 
 int main() {
     System files;
-    if (openFiles(&files) == FILES_OPENED_SUCCESSFULLY) {
-        int executionResult = parseCode(&files);
+    FileStatus status = openFiles(&files);
+    if (status == FILES_OPENED_SUCCESSFULLY) {
+        ExecutionStatus executionResult = parseCode(&files);
         if (executionResult == CODE_EXECUTED_WITHOUT_ISSUES) {
             printf("Program executed successfully!");
-            if (closeFiles(files.output, files.code, files.input) != FILES_CLOSED_SUCCESSFULLY) {
+            if (closeFiles(&files) != FILES_CLOSED_SUCCESSFULLY) {
                 logError("There was an error during the process", ERROR, &files);
                 return -1;
             }
             return 0;
         } else {
             printExecutionIssues(executionResult, &files);
-            closeFiles(files.output, files.code, files.input);
+            closeFiles(&files);
             return -1;
         }
-    } else if (openFiles(&files) == COULD_NOT_OPEN_FILES) {
+    } else if (status == COULD_NOT_OPEN_FILES) {
         return -1;
     }
 }
